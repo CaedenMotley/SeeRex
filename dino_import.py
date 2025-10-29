@@ -1,6 +1,10 @@
+'''
+This file will be generalized downstream, for now wait until token authorization
+'''
+
+
 import sys
 import os
-
 sys.path.append("external/dinov3")
 
 import torch
