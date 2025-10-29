@@ -1,18 +1,21 @@
-'''
-This file will be generalized downstream, for now wait until token authorization
-'''
+# src/dino_import.py
 
-
-import sys
 import os
-sys.path.append("external/dinov3")
-
-import torch
 from transformers import AutoImageProcessor, AutoModel
 
-model_name = "facebook/dinov3-vits16-pretrain-lvd1689m"
-processor = AutoImageProcessor.from_pretrained(model_name, token=os.getenv("HF_TOKEN"))
-model = AutoModel.from_pretrained(model_name, token=os.getenv("HF_TOKEN"))
+HF_TOKEN = os.getenv("HF_TOKEN")
+MODEL_NAME = "facebook/dinov3-vits16-pretrain-lvd1689m"
 
+if not HF_TOKEN:
+    raise EnvironmentError("HF_TOKEN not found. Please set it or load from a .env file.")
 
-print("Model loaded successfully!")
+def load_dinov3():
+    """
+    Load and return the DINOv3 processor and model.
+    """
+    processor = AutoImageProcessor.from_pretrained(MODEL_NAME, token=HF_TOKEN)
+    model = AutoModel.from_pretrained(MODEL_NAME, token=HF_TOKEN, output_attentions=True)
+    model.eval()
+    print("model loaded")
+    return processor, model
+
