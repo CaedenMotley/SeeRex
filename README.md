@@ -2,16 +2,16 @@
 # DINOv3 Attention Heatmap Visualizer 
 
 This repository provides a simple tool for visualizing **attention maps** from [Meta’s DINOv3](https://huggingface.co/facebook/dinov3-vits16-pretrain-lvd1689m) model.  
-It extracts and overlays **CLS-to-patch attention** from the model’s internal layers to show **where the network is “looking”** when interpreting an image.
+It extracts and overlays **CLS to patch attention** from the model’s internal layers to show **where the network is “looking”** when interpreting an image.
 
 ---
 
 ##  What Is an Attention Heatmap?
 
-In transformer-based vision models like DINOv3, every image is divided into small **patches**, and the model learns how each patch relates to others through a mechanism called **self-attention**.  
+In transformer based vision models like DINOv3, every image is divided into small **patches**, and the model learns how each patch relates to others through a mechanism called **self attention**.  
 The **CLS token** (short for “classification”) acts like a global summary; it gathers information from all patches to make predictions.
 
-A **CLS-to-patch attention heatmap** shows *which image regions most strongly influenced that summary*.  
+A **CLS to patch attention heatmap** shows *which image regions most strongly influenced that summary*.  
 - Bright areas indicate patches the model considered *important*.  
 - Dark areas indicate patches it largely *ignored*.
 
