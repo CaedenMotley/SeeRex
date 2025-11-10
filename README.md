@@ -18,6 +18,27 @@ A **CLS to patch attention heatmap** shows *which image regions most strongly in
 In short, this visualization offers a peek into **how the model perceives and prioritizes different parts of an image**.
 
 ---
+## Example of Heatmap Output
+
+Below is an example showing how the attention heatmap highlights the most influential regions of the image as seen by DINOv3.
+
+<table align="center">
+  <tr valign="top">
+    <td align="center" width="50%">
+      <div style="display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding:10px;">
+        <img src="images/LadNCow.jpeg" alt="Original Image" width="95%" style="border-radius:10px; display:block; margin-bottom:10px;"/>
+        <p style="margin:0;"><b>Original:</b> Me and a very patient Highland cow.</p>
+      </div>
+    </td>
+    <td align="center" width="50%">
+      <div style="display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding:10px;">
+        <img src="data/visuals/LadNCow_overlay.png" alt="DINOv3 Attention Overlay" width="95%" style="border-radius:10px; display:block; margin-bottom:10px;"/>
+        <p style="margin:0;"><b>Overlay:</b> Attention heatmap from DINOv3’s final transformer layer (head 4), showing where the model focused most strongly when forming its final image representation. Brighter regions indicate the areas that influenced it the most.</p>
+      </div>
+    </td>
+  </tr>
+</table>
+
 
 ##  Setup
 
