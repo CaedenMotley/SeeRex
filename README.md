@@ -62,6 +62,10 @@ Right now the script produces only one heatmap (typically from the final layer a
 * Static image selection
 Currently the script expects one image and does not yet offer CLI arguments or a UI to pick images.
 
+##  Work in Progress
+* implementation of a **D3.js** and **JavaScript** web interface for real time,  
+  interactive exploration of DINOv3 attention heatmaps within the browser.This will be worked on once current limitations are fixed.
+
 ## Attribution
 
 This project builds on the DINOv3 model released by Meta AI.
