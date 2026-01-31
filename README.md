@@ -74,8 +74,8 @@ The script will:
 * Display and save the result in outputs/
 
 ##  Current Limitations
-* Heatmap offset bug
-When saving the attention overlay as a PNG, the saved image may not perfectly match the displayed one. There is a small alignment/misalignment issue being debugged.
+* ~~Heatmap offset bug~~
+~~When saving the attention overlay as a PNG, the saved image may not perfectly match the displayed one. There is a small alignment/misalignment issue being debugged.~~
 
 * Single heatmap only
 Right now the script produces only one heatmap (typically from the final layer and averaged). A full visualization across all layers/heads is a work in progress.
