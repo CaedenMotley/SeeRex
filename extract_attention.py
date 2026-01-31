@@ -25,7 +25,7 @@ def get_cls_attention_map(
     attentions: torch.Tensor,
     grid_h: int,
     grid_w: int,
-    head: int = 4,
+    head: int = 5,
     gamma: float = 0.5,
     percentile_clip: float = 90.0
 ) -> np.ndarray:
@@ -50,11 +50,16 @@ def get_cls_attention_map(
         raise ValueError("`attentions` must be a non-empty list/tuple of attention tensors.")
 
     if head < 0 or head >= attentions[-1].shape[1]:
+        print("remember index starts at 0 you can not do 6 if available heads is 6")
         raise ValueError(f"Head index {head} out of range for available heads {attentions[-1].shape[1]}")
 
     # Select the last layer and chosen head
     attn = attentions[-1][0, head]  # (tokens, tokens)
-    cls_attn = attn[0, 1:]          # CLS -> all other tokens
+
+    ''' *IMPORTANT BUG FIX* DinoV3 has 4 reg tokens'''
+    NUM_REGISTER_TOKENS = 4  # DINOv3 specific
+
+    cls_attn = attn[0, 1 + NUM_REGISTER_TOKENS:]
 
     # Validate token count and trim extra special tokens
     num_patches = grid_h * grid_w
@@ -94,7 +99,9 @@ def overlay_attention(image: np.ndarray, attn_map: np.ndarray, alpha=0.45):
     Overlays attention heatmap on the original image.
     """
     attn_resized = cv2.resize(attn_map, (image.shape[1], image.shape[0]))
-    heatmap = cv2.applyColorMap(np.uint8(255 * attn_resized), cv2.COLORMAP_INFERNO)
+    heatmap = cv2.applyColorMap(np.uint8(255 * attn_resized), cv2.COLORMAP_INFERNO) # may swap colormap
+
+    #cv2 blends the heatmap with the orignal image (dst = alpha * src1 + beta * src2 + gamma)
     overlay = cv2.addWeighted(image, 1 - alpha, heatmap, alpha, 0)
     return overlay
 
