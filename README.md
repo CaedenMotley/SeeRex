@@ -18,6 +18,7 @@ A **CLS to patch attention heatmap** shows *which image regions most strongly in
 In short, this visualization offers a peek into **how the model perceives and prioritizes different parts of an image**.
 
 ---
+
 ## Example of Heatmap Output
 
 Below is an example showing how the attention heatmap highlights the most influential regions of the image as seen by DINOv3.
@@ -25,22 +26,37 @@ Below is an example showing how the attention heatmap highlights the most influe
 <table align="center">
   <tr valign="top">
     <td align="center" width="50%">
-      <div style="display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding:10px;">
-        <img src="images/LadNCow.jpeg" alt="Original Image" width="95%" style="border-radius:10px; display:block; margin-bottom:10px;"/>
-        <p style="margin:0;"><b>Original:</b> Me and a very patient Highland cow.</p>
-      </div>
+        <img src="images/LadNCow.jpeg" alt="Original Image" width="95%" style="border-radius:10px;"/><br>
+        <b>Original:</b> Me and a very patient Highland cow.
     </td>
     <td align="center" width="50%">
-      <div style="display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding:10px;">
-        <img src="data/visuals/LadNCow_overlay.png" alt="DINOv3 Attention Overlay" width="95%" style="border-radius:10px; display:block; margin-bottom:10px;"/>
-        <p style="margin:0;"><b>Overlay:</b> Attention heatmap from DINOv3’s final transformer layer (head 4), showing where the model focused most strongly when forming its final image representation. Brighter regions indicate the areas that influenced it the most.</p>
-      </div>
+        <img src="data/visuals/LadNCow_overlay.png" alt="DINOv3 Attention Overlay" width="95%" style="border-radius:10px;"/><br>
+        <b>Overlay:</b> Attention heatmap from DINOv3’s final transformer layer.
     </td>
   </tr>
 </table>
 
+---
+### Model Evolution: Layer-by-Layer
 
-##  Setup
+This section visualizes how DINOv3 processes an image through its 12 transformer layers. As the data moves deeper into the network, the attention shifts from raw pixels and edges to high-level semantic understanding.
+DINOv3 does not give explicit definition of each heads "job". 
+
+### The Collective View (Grid Evolution)
+The grid below shows all **6 attention heads** changing simultaneously. This "collective" view captures the model's global "train of thought." It demonstrates how different parts of the network work in parallel, some focusing on background context while others narrow down on the primary subjects. As the layers progress, you will see the initial chaotic noise coalesce into clean, recognizable shapes.
+
+<p align="center">
+  <img src="data/visuals/LadNCow/all_heads_grid_evolution.gif" width="90%" alt="All Heads Evolution Grid">
+</p>
+
+ Collective Layer Evolution
+The GIF below displays the **averaged attention** across all heads for every layer of the model (Layer 0 through Layer 11). 
+
+<p align="center">
+  <img src="data\visuals\LadNCow\LadNCow_evolution.gif" width="70%" alt="DINOv3 Layer Evolution">
+</p>
+
+---
 
 1. **Clone the repository**
    ```bash
@@ -65,23 +81,35 @@ HF_TOKEN="your_huggingface_token_here"
 
 4. **Testing with your own image**
 Place your test image in the data/ directory.
-run:   python visualize.py
+
+For Interactable slider for heads/layers run : _extract_attention_.py
+otherwise for gif generation for all heads run: _extract_all_heads_beta_.py
 
 The script will:
 * Load the DINOv3 model from Hugging Face
 * Compute the CLS attention map from the final layer
 * Overlay it on the image
-* Display and save the result in outputs/
+* Display and save the image to data/visuals
 
 ##  Current Limitations
-* Heatmap offset bug
-When saving the attention overlay as a PNG, the saved image may not perfectly match the displayed one. There is a small alignment/misalignment issue being debugged.
+note: crossed out = patched (mainly for my reference!)
+* Potential generation glitch
+There are some weird orbs that seem to appear in layer generation, these may be part of dino's architecture but I will sweep code to see if something is causing it. 
 
-* Single heatmap only
-Right now the script produces only one heatmap (typically from the final layer and averaged). A full visualization across all layers/heads is a work in progress.
 
 * Static image selection
-Currently the script expects one image and does not yet offer CLI arguments or a UI to pick images.
+Currently the script expects one image and does not yet offer CLI arguments or a UI to pick images.~~
+
+
+*  ~~Heatmap offset bug
+When saving the attention overlay as a PNG, the saved image may not perfectly match the displayed one. There is a small alignment/misalignment issue being debugged.~~
+
+
+* ~~Single heatmap only
+Right now the script produces only one heatmap (typically from the final layer and averaged). A full visualization across all layers/heads is a work in progress.~~
+
+
+
 
 ##  Work in Progress
 * implementation of a **D3.js** and **JavaScript** web interface for real time,  

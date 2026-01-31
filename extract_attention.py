@@ -5,6 +5,8 @@ from pathlib import Path
 from dino_import import load_dinov3
 import cv2
 from PIL import Image
+from matplotlib.widgets import Slider
+
 
 
 '''
@@ -118,7 +120,94 @@ def save_results(attn_map: np.ndarray, overlay_rgb: np.ndarray, base_name: str):
     plt.imsave(out_dir / f"{base_name}_overlay.png", overlay_rgb.astype(np.uint8))
     print(f" Saved attention and overlay to {out_dir}")
 
+def save_all_heads(
+    image_rgb: np.ndarray,
+    head_maps: list[np.ndarray],
+    base_name: str
+):
+    out_dir = DATA_DIR / "visuals" / base_name
+    out_dir.mkdir(parents=True, exist_ok=True)
 
+    image_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
+
+    for i, attn_map in enumerate(head_maps):
+        overlay_bgr = overlay_attention(image_bgr, attn_map)
+        overlay_rgb = cv2.cvtColor(overlay_bgr, cv2.COLOR_BGR2RGB)
+
+        np.save(out_dir / f"head_{i:02d}.npy", attn_map)
+        plt.imsave(out_dir / f"head_{i:02d}.png", overlay_rgb)
+
+    print(f"Saved {len(head_maps)} heads to {out_dir}")
+
+def visualize_heads_interactively(
+    image_rgb: np.ndarray,
+    head_maps: list[np.ndarray]
+):
+    image_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
+
+    fig, ax = plt.subplots(figsize=(6, 8))
+    plt.subplots_adjust(bottom=0.2)
+
+    # Initial head
+    current_head = 0
+    overlay_bgr = overlay_attention(image_bgr, head_maps[current_head])
+    overlay_rgb = cv2.cvtColor(overlay_bgr, cv2.COLOR_BGR2RGB)
+
+    img_display = ax.imshow(overlay_rgb)
+    ax.set_title(f"Attention Head {current_head}")
+    ax.axis("off")
+
+    # Slider
+    ax_slider = plt.axes([0.2, 0.05, 0.6, 0.03])
+    slider = Slider(
+        ax=ax_slider,
+        label="Head",
+        valmin=0,
+        valmax=len(head_maps) - 1,
+        valinit=0,
+        valstep=1
+    )
+
+    def update(val):
+        head = int(slider.val)
+        overlay_bgr = overlay_attention(image_bgr, head_maps[head])
+        overlay_rgb = cv2.cvtColor(overlay_bgr, cv2.COLOR_BGR2RGB)
+
+        img_display.set_data(overlay_rgb)
+        ax.set_title(f"Attention Head {head}")
+        fig.canvas.draw_idle()
+
+    slider.on_changed(update)
+    plt.show()
+
+def get_cls_attention_map_for_layer(
+    attentions: list,
+    layer_idx: int,
+    grid_h: int,
+    grid_w: int,
+    gamma: float = 0.5,
+    percentile_clip: float = 90.0
+) -> np.ndarray:
+    """
+    Averages CLS-to-patch attention across all heads for a given layer.
+    """
+    layer_attn = attentions[layer_idx]  # (B, H, T, T)
+    avg_attn = layer_attn[0].mean(dim=0)  # (T, T)
+
+    NUM_REGISTER_TOKENS = 4
+    cls_attn = avg_attn[0, 1 + NUM_REGISTER_TOKENS:]
+
+    cls_attn = cls_attn[: grid_h * grid_w]
+    cls_map = cls_attn.reshape(grid_h, grid_w).cpu().numpy()
+
+    cls_map /= cls_map.max()
+    cls_map = np.power(cls_map, gamma)
+
+    p = np.percentile(cls_map, percentile_clip)
+    if p > 0:
+        cls_map = np.clip(cls_map / p, 0, 1)
+
+    return cls_map
 
 def extract_and_visualize(image_path: Path):
     """
@@ -126,7 +215,7 @@ def extract_and_visualize(image_path: Path):
     """
     # Load and resize the image (control scale here)
     image = Image.open(image_path).convert("RGB")
-    image_resized = image.resize(TARGET_SIZE, Image.BILINEAR)
+    image_resized = image.resize(TARGET_SIZE)
     image_np = np.array(image_resized)
 
     # Compute patch grid
@@ -143,10 +232,44 @@ def extract_and_visualize(image_path: Path):
     with torch.no_grad():
         outputs = model(**inputs)
 
+    '''deprecated code below for singular head '''
     # Extract CLS attention
-    attentions = outputs.attentions
-    cls_map = get_cls_attention_map(attentions, grid_h, grid_w)
+    # attentions = outputs.attentions
+    # cls_map = get_cls_attention_map(attentions, grid_h, grid_w)
 
+    attentions = outputs.attentions
+    num_heads = attentions[-1].shape[1]
+    print(f"Number of attention heads: {num_heads}")
+
+    ''' the below loop produces attn heads at final layer
+    all_head_maps = []
+
+    for head_idx in range(num_heads):
+        cls_map = get_cls_attention_map(
+            attentions,
+            grid_h,
+            grid_w,
+            head=head_idx
+        )
+        all_head_maps.append(cls_map)'''
+    num_layers = len(attentions)
+    layer_maps = []
+
+    for layer_idx in range(num_layers):
+        cls_map = get_cls_attention_map_for_layer(
+            attentions,
+            layer_idx,
+            grid_h,
+            grid_w
+        )
+        layer_maps.append(cls_map)
+
+    save_all_heads(image_np, layer_maps, f"{image_path.stem}_layers")
+    visualize_heads_interactively(image_np, layer_maps)
+
+'''
+    Generates the side by side for GIT readme visualization
+    
     # Overlay on resized image
     overlay_bgr = overlay_attention(image_np, cls_map)
     overlay_rgb = cv2.cvtColor(overlay_bgr, cv2.COLOR_BGR2RGB)
@@ -168,7 +291,7 @@ def extract_and_visualize(image_path: Path):
 
     # Save both maps
     save_results(cls_map, overlay_rgb, image_path.stem)
-
+'''
 
 if __name__ == "__main__":
     extract_and_visualize(IMAGE_PATH)
