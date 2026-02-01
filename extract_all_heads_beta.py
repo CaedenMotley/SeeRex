@@ -25,9 +25,8 @@ def get_cls_attention_map(
     head_idx: int,
     grid_h: int,
     grid_w: int,
-    head: int = 5,
     gamma: float = 0.5,
-    percentile_clip: float = 90.0
+    percentile_clip: float = 99.9
 ) -> np.ndarray:
     """
     Extracts and reshapes CLS to patch attention into an image space heatmap.
@@ -44,49 +43,31 @@ def get_cls_attention_map(
     Returns:
         np.ndarray: Normalized 2D CLS attention heatmap.
     """
+    # this varies greaatly from its parent file and will be debugged as progress is made
+    # this shall eventually userp the parent code!
 
-    # Extract a specific head's CLS attention
-    if not isinstance(attentions, (list, tuple)) or len(attentions) == 0:
-        raise ValueError("`attentions` must be a non-empty list/tuple of attention tensors.")
-
-    if head < 0 or head >= attentions[-1].shape[1]:
-        print("remember index starts at 0 you can not do 6 if available heads is 6")
-        raise ValueError(f"Head index {head} out of range for available heads {attentions[-1].shape[1]}")
-
-    # Select the last layer and chosen head
-    attn = attentions[layer_idx][0, head_idx]
-
-    NUM_REGISTER_TOKENS = 4  # DINOv3 specific
-
-    cls_attn = attn[0, 1 + NUM_REGISTER_TOKENS:]
-
+    cls_attn_row = attentions[layer_idx][0, head_idx, 0]
     num_patches = grid_h * grid_w
-    if cls_attn.shape[0] < num_patches:
-        raise ValueError(
-            f"Attention has fewer tokens ({cls_attn.shape[0]}) "
-            f"than expected grid ({grid_h}×{grid_w}={num_patches}). "
-            "Check model patch size or image resize transform."
-        )
 
-    # Trim any extra tokens (distillation/global tokens)
-    cls_attn = cls_attn[:num_patches]
+    # Take the last N patches
+    patch_attn = cls_attn_row[-num_patches:]
 
-    # Reshape and normalize attention
-    cls_attn_map = cls_attn.reshape(grid_h, grid_w).cpu().numpy()
+    cls_attn_map = patch_attn.reshape(grid_h, grid_w).cpu().numpy()
 
-    if cls_attn_map.max() == 0:
-        raise ValueError("Attention map contains only zeros — invalid or empty attention values.")
 
-    cls_attn_map /= cls_attn_map.max()
+    # This removes the edge sinks being created causing visual bugs
+    cls_attn_map[0, :] = 0  # Top row
+    cls_attn_map[-1, :] = 0  # Bottom row
+    cls_attn_map[:, 0] = 0  # Left col
+    cls_attn_map[:, -1] = 0  # Right col
+
+    vmax = np.percentile(cls_attn_map, percentile_clip)
+    if vmax > 0:
+        cls_attn_map = np.clip(cls_attn_map / vmax, 0, 1)
 
     cls_attn_map = np.power(cls_attn_map, gamma)
 
-    p = np.percentile(cls_attn_map, percentile_clip)
-    if p > 0:
-        cls_attn_map = np.clip(cls_attn_map / p, 0, 1)
-
     return cls_attn_map
-
 
 def overlay_attention(image: np.ndarray, attn_map: np.ndarray, alpha=0.45):
     """
@@ -96,7 +77,7 @@ def overlay_attention(image: np.ndarray, attn_map: np.ndarray, alpha=0.45):
 
     heatmap_bgr = cv2.applyColorMap(np.uint8(255 * attn_resized), cv2.COLORMAP_INFERNO)
 
-    #  Convert BGR -> RGB
+    #  Convert BGR - >  RGB
     heatmap_rgb = cv2.cvtColor(heatmap_bgr, cv2.COLOR_BGR2RGB)
 
     overlay = cv2.addWeighted(image, 1 - alpha, heatmap_rgb, alpha, 0)
@@ -145,7 +126,7 @@ def save_all_animations(image_np, attentions, grid_h, grid_w, folder_name):
             if l == 0: axes[h].set_title(f"Head {h}", color='black')
             step_artists.append(im)
 
-        # Add a global layer counter
+        # Add a simple global layer counter
         title = fig.text(0.5, 0.92, f"DINOv3 Layer {l}",
                          ha="center", fontsize=16, weight='bold')
         step_artists.append(title)
@@ -172,7 +153,7 @@ def save_layer_evolution_gif(
 
     ims = []
     for i, attn_map in enumerate(layer_maps):
-        # Process overlay using your existing overlay_attention function
+
         overlay_rgb = overlay_attention(image_rgb, attn_map)
 
         im = ax.imshow(overlay_rgb, animated=True)
@@ -206,27 +187,44 @@ def extract_and_visualize(image_path: Path):
     with torch.no_grad():
         outputs = model(**inputs, output_attentions=True)
 
+    total_tokens = outputs.attentions[0].shape[-1]
+    expected_patches = grid_h * grid_w
+    diff = total_tokens - expected_patches
+
+    print(f"--- DIAGNOSTIC SHIZ ---")
+    print(f"Total tokens in sequence: {total_tokens}")
+    print(f"Expected patch tokens: {expected_patches}")
+    print(f"Extra tokens found: {diff}")
+
     # Saves individual heads and the 2 x 3 grid
     save_all_animations(image_np, outputs.attentions, grid_h, grid_w, image_path.stem)
 
     #averages each head into 1
     num_layers = len(outputs.attentions)
     layer_maps = []
+    num_patches = grid_h * grid_w  # Calculate this once
 
+    print("Generating Averaged Layer Evolution...")
     for l in range(num_layers):
-        # Calculate the average across all 6 heads for this layer
-        avg_attn = outputs.attentions[l][0].mean(dim=0)
+        # Average across all heads for this layer
+        # attentions[l][0] is (Heads, Tokens, Tokens) -> mean(0) is (Tokens, Tokens)
+        avg_attn_matrix = outputs.attentions[l][0].mean(dim=0)
 
-        NUM_REGISTER_TOKENS = 4  # DINOv3 specific
+        # Get the CLS token's attention row (index 0)
+        avg_cls_row = avg_attn_matrix[0]
 
-        cls_attn = avg_attn[0, 1 + NUM_REGISTER_TOKENS:]
+        # take the last num_patches tokens
+        patch_attn = avg_cls_row[-num_patches:]
 
         # Reshape to image dimensions
-        cls_map = cls_attn.reshape(grid_h, grid_w).cpu().numpy()
+        cls_map = patch_attn.reshape(grid_h, grid_w).cpu().numpy()
 
         # Normalize and apply brightness correction
         if cls_map.max() > 0:
             cls_map /= cls_map.max()
+        else:
+            cls_map = np.zeros((grid_h, grid_w), dtype=np.float32)
+
         layer_maps.append(np.power(cls_map, 0.5))
 
     out_gif = DATA_DIR / "visuals" / image_path.stem / f"{image_path.stem}_evolution.gif"
