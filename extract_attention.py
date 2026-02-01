@@ -210,51 +210,28 @@ def get_cls_attention_map_for_layer(
     return cls_map
 
 def extract_and_visualize(image_path: Path):
-    """
-    Loads DINOv3, extracts CLS-to-patch attention, visualizes and saves it.
-    """
-    # Load and resize the image (control scale here)
+    # Image Prep
     image = Image.open(image_path).convert("RGB")
     image_resized = image.resize(TARGET_SIZE)
     image_np = np.array(image_resized)
 
-    # Compute patch grid
     grid_h, grid_w = TARGET_SIZE[1] // PATCH_SIZE, TARGET_SIZE[0] // PATCH_SIZE
 
-    # Load model
     processor, model = load_dinov3()
     model.to(DEVICE)
+    print("model loaded")
 
-    # Preprocess (disable internal resize i already handle it)
     inputs = processor(images=image_resized, return_tensors="pt", do_resize=False).to(DEVICE)
 
-    # Forward pass
     with torch.no_grad():
-        outputs = model(**inputs)
-
-    '''deprecated code below for singular head '''
-    # Extract CLS attention
-    # attentions = outputs.attentions
-    # cls_map = get_cls_attention_map(attentions, grid_h, grid_w)
+        outputs = model(**inputs, output_attentions=True)
 
     attentions = outputs.attentions
-    num_heads = attentions[-1].shape[1]
-    print(f"Number of attention heads: {num_heads}")
-
-    ''' the below loop produces attn heads at final layer
-    all_head_maps = []
-
-    for head_idx in range(num_heads):
-        cls_map = get_cls_attention_map(
-            attentions,
-            grid_h,
-            grid_w,
-            head=head_idx
-        )
-        all_head_maps.append(cls_map)'''
     num_layers = len(attentions)
-    layer_maps = []
+    num_heads = attentions[0].shape[1]
+    print(f"Model has {num_layers} layers and {num_heads} heads.")
 
+    layer_maps = []
     for layer_idx in range(num_layers):
         cls_map = get_cls_attention_map_for_layer(
             attentions,
@@ -264,7 +241,8 @@ def extract_and_visualize(image_path: Path):
         )
         layer_maps.append(cls_map)
 
-    save_all_heads(image_np, layer_maps, f"{image_path.stem}_layers")
+    # Save and Visualize
+    save_all_heads(image_np, layer_maps, f"{image_path.stem}_layer_evolution")
     visualize_heads_interactively(image_np, layer_maps)
 
 '''
